@@ -2,7 +2,13 @@ import pygame, os
 
 class AudioManager:
     def __init__(self):
-        pygame.mixer.init()
+        # Try to initialize audio, but don't fail if unavailable (headless)
+        self.audio_available = False
+        try:
+            pygame.mixer.init()
+            self.audio_available = True
+        except Exception as e:
+            print(f"Audio not available: {e}")
         self.sfx = {}
         self.music_channel = None
 
