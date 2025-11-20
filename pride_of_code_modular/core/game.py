@@ -1,16 +1,19 @@
 import pygame
 import time
 
-from config import WINDOW_WIDTH, WINDOW_HEIGHT, GAME_TITLE
+from config import WINDOW_WIDTH, WINDOW_HEIGHT, GAME_TITLE, EDITOR_X, EDITOR_Y, EDITOR_WIDTH, EDITOR_HEIGHT
 
 from core.state_manager import StateManager
 from core.audio_manager import AudioManager
 from core.save_system import SaveSystem
 
 from gameplay.level_manager import LevelManager
+from gameplay.lessons import LessonManager
 from ui.editor import CodeEditor
 
-from scenes.menu import MainMenu
+# Import enhanced scenes
+from scenes.retro_menu import RetroMainMenu
+from scenes.enhanced_editor import EnhancedEditorScene
 from scenes.level_select import LevelSelect
 from scenes.editor_scene import EditorScene
 from scenes.results import ResultsScene
@@ -37,16 +40,13 @@ class PrideOfCodeGame:
         self.audio = AudioManager()
         self.save = SaveSystem()
         self.level_manager = LevelManager()
+        self.lesson_manager = LessonManager()
 
         # -------------------------------
         # Editor (global instance)
         # -------------------------------
-        # IMPORTANT: you can reposition or resize this panel later
         self.editor = CodeEditor(
-            x=400, 
-            y=80, 
-            width=WINDOW_WIDTH - 420, 
-            height=WINDOW_HEIGHT - 160
+            rect=pygame.Rect(EDITOR_X, EDITOR_Y, EDITOR_WIDTH, EDITOR_HEIGHT)
         )
 
         # -------------------------------
@@ -54,15 +54,19 @@ class PrideOfCodeGame:
         # -------------------------------
         self.state_manager = StateManager()
 
-        # Menu
+        # Enhanced Retro Menu
         self.state_manager.register("menu", 
-            MainMenu(self.state_manager, self))
+            RetroMainMenu(self.state_manager, self))
+
+        # Enhanced Editor Scene (main gameplay)
+        self.state_manager.register("enhanced_editor",
+            EnhancedEditorScene(self.state_manager, self, self.lesson_manager))
 
         # Level Select
         self.state_manager.register("level_select",
             LevelSelect(self.state_manager, self, self.level_manager))
 
-        # Editor Scene
+        # Legacy Editor Scene (keeping for compatibility)
         self.state_manager.register("editor",
             EditorScene(self.state_manager, self, self.level_manager))
 
