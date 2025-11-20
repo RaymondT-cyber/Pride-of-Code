@@ -1,4 +1,5 @@
-"""Band API - Pre-defined commands for controlling the marching band.
+"""
+Band API - Pre-defined commands for controlling the marching band.
 
 This module provides a simple, Pythonic API that students can use
 to control band members on the field.
@@ -18,6 +19,10 @@ class BandMember:
         self.section = section
         self.instrument = instrument
         self.facing = 0  # Direction in degrees (0 = up field)
+        
+        # Animation properties
+        self.step_phase = 0  # For walking animation
+        self.selected = False  # Is this member selected?
         
     def __repr__(self):
         return f"BandMember({self.id}, x={self.x:.1f}, y={self.y:.1f}, {self.section})"
@@ -61,6 +66,14 @@ class BandAPI:
                    'percussion', 'percussion', 'percussion', 'percussion',
                    'guard', 'guard', 'guard', 'guard']
         
+        # Instruments for each section
+        instruments = {
+            'brass': ['trumpet', 'trombone', 'french horn', 'tuba'],
+            'woodwind': ['flute', 'clarinet', 'saxophone', 'oboe'],
+            'percussion': ['snare', 'bass drum', 'cymbals', 'mallets'],
+            'guard': ['flag', 'rifle', 'saber', 'banner']
+        }
+        
         rows = 4
         cols = size // rows
         start_x = 20  # Start at 20-yard line
@@ -73,7 +86,11 @@ class BandAPI:
             y = start_y + row * 8
             section = sections[i % len(sections)]
             
-            member = BandMember(i, x, y, section)
+            # Select instrument based on position in section
+            instr_list = instruments[section]
+            instrument = instr_list[i % len(instr_list)]
+            
+            member = BandMember(i, x, y, section, instrument)
             self.members.append(member)
             self.sections[section].append(member)
             

@@ -1,4 +1,5 @@
-"""Field View - Retro Bowl-style marching field simulator.
+"""
+Field View - Retro Bowl-style marching field simulator.
 
 This module renders the football field and animates band members
 in a classic 8-bit pixel art style.
@@ -13,6 +14,7 @@ from config import (
     SECTION_COLORS, MARCHER_SIZE, FIELD_LENGTH, FIELD_WIDTH
 )
 from gameplay.band_api import BandMember
+
 
 
 class FieldView:
@@ -36,6 +38,10 @@ class FieldView:
         # Animation state
         self.show_grid = True
         self.show_coordinates = False
+        self.show_section_labels = True
+        
+        # Grid settings
+        self.grid_steps = 4  # 4 steps per 5 yards
         
     def _render_field(self):
         """Render the static football field background."""
@@ -76,6 +82,12 @@ class FieldView:
         pygame.draw.line(self.field_surface, COLOR_GOLD,
                         (x_50, 5), (x_50, self.height - 5), 3)
         
+        # Draw end zones
+        pygame.draw.rect(self.field_surface, (100, 100, 100), 
+                        (0, 0, self._yard_to_pixel_x(10), self.height))
+        pygame.draw.rect(self.field_surface, (100, 100, 100), 
+                        (self.width - self._yard_to_pixel_x(10), 0, self._yard_to_pixel_x(10), self.height))
+        
     def _yard_to_pixel_x(self, yard: float) -> int:
         """Convert yard line (0-100) to pixel x coordinate."""
         return int((yard / FIELD_LENGTH) * (self.width - 10) + 5)
@@ -93,7 +105,7 @@ class FieldView:
         return ((pixel_y - 5) / (self.height - 10)) * FIELD_WIDTH
         
     def _draw_marcher_sprite(self, surface: pygame.Surface, x: int, y: int, 
-                            section: str, facing: float = 0):
+                            section: str, facing: float = 0, selected: bool = False):
         """Draw a Retro Bowl-style 8x8 pixel marcher sprite.
         
         Args:
@@ -101,6 +113,7 @@ class FieldView:
             x, y: Center position in pixels
             section: Band section for color
             facing: Direction in degrees (0 = up)
+            selected: Whether the marcher is selected
         """
         color = SECTION_COLORS.get(section, COLOR_GOLD)
         
@@ -124,15 +137,20 @@ class FieldView:
         elif facing == 270:  # Left
             pygame.draw.circle(sprite, (255, 255, 255), (1, 4), 1)
             
+        # Add selection highlight
+        if selected:
+            pygame.draw.rect(sprite, (255, 255, 255), (0, 0, MARCHER_SIZE, MARCHER_SIZE), 1)
+            
         # Blit sprite centered at position
         surface.blit(sprite, (x - MARCHER_SIZE // 2, y - MARCHER_SIZE // 2))
         
-    def draw(self, surface: pygame.Surface, members: List[BandMember]):
+    def draw(self, surface: pygame.Surface, members: List[BandMember], selected_member: Optional[BandMember] = None):
         """Draw the field and all band members.
         
         Args:
             surface: Main game surface
             members: List of BandMember objects to render
+            selected_member: Currently selected member (if any)
         """
         # Draw field background
         surface.blit(self.field_surface, (self.x, self.y))
@@ -145,13 +163,20 @@ class FieldView:
         for member in members:
             px = self.x + self._yard_to_pixel_x(member.x)
             py = self.y + self._yard_to_pixel_y(member.y)
-            self._draw_marcher_sprite(surface, px, py, member.section, member.facing)
+            is_selected = selected_member is not None and selected_member.id == member.id
+            self._draw_marcher_sprite(surface, px, py, member.section, member.facing, is_selected)
             
             # Show coordinates if enabled
             if self.show_coordinates:
                 coord_text = f"({member.x:.0f},{member.y:.0f})"
                 text_surf = self.font_small.render(coord_text, True, COLOR_FIELD_LINES)
                 surface.blit(text_surf, (px - 15, py + 8))
+                
+            # Show section labels if enabled
+            if self.show_section_labels:
+                label_text = member.section[:1].upper()  # First letter of section
+                text_surf = self.font_small.render(label_text, True, (255, 255, 255))
+                surface.blit(text_surf, (px - 3, py - 12))
                 
     def _draw_grid(self, surface: pygame.Surface):
         """Draw a subtle grid overlay for coding reference."""
@@ -167,6 +192,18 @@ class FieldView:
             pygame.draw.line(surface, (255, 255, 255, 40),
                            (self.x, y), (self.x + self.width, y), 1)
                            
+        # Draw finer grid steps (4 steps per 5 yards)
+        step_yards = 5.0 / self.grid_steps
+        for yard_x in [i * step_yards for i in range(int(100 / step_yards) + 1)]:
+            x = self.x + self._yard_to_pixel_x(yard_x)
+            pygame.draw.line(surface, (200, 200, 200, 20),
+                           (x, self.y), (x, self.y + self.height), 1)
+                           
+        for yard_y in [i * step_yards for i in range(int(53.33 / step_yards) + 1)]:
+            y = self.y + self._yard_to_pixel_y(yard_y)
+            pygame.draw.line(surface, (200, 200, 200, 20),
+                           (self.x, y), (self.x + self.width, y), 1)
+                           
     def toggle_grid(self):
         """Toggle grid display."""
         self.show_grid = not self.show_grid
@@ -174,6 +211,10 @@ class FieldView:
     def toggle_coordinates(self):
         """Toggle coordinate display."""
         self.show_coordinates = not self.show_coordinates
+        
+    def toggle_section_labels(self):
+        """Toggle section label display."""
+        self.show_section_labels = not self.show_section_labels
         
     def get_yard_at_mouse(self, mouse_pos: Tuple[int, int]) -> Optional[Tuple[float, float]]:
         """Convert mouse position to field coordinates.
@@ -192,3 +233,37 @@ class FieldView:
         yard_y = self._pixel_to_yard_y(rel_y)
         
         return (yard_x, yard_y)
+        
+    def get_member_at_mouse(self, mouse_pos: Tuple[int, int], members: List[BandMember]) -> Optional[BandMember]:
+        """Get the band member at the mouse position.
+        
+        Args:
+            mouse_pos: Mouse position (x, y)
+            members: List of band members
+            
+        Returns:
+            BandMember at position or None
+        """
+        mx, my = mouse_pos
+        if not self.rect.collidepoint(mx, my):
+            return None
+            
+        # Convert mouse to yard coordinates
+        yard_pos = self.get_yard_at_mouse(mouse_pos)
+        if not yard_pos:
+            return None
+            
+        yard_x, yard_y = yard_pos
+        
+        # Find the closest member within a threshold
+        threshold = 2.0  # yards
+        closest_member = None
+        closest_distance = float('inf')
+        
+        for member in members:
+            distance = math.sqrt((member.x - yard_x)**2 + (member.y - yard_y)**2)
+            if distance < threshold and distance < closest_distance:
+                closest_member = member
+                closest_distance = distance
+                
+        return closest_member

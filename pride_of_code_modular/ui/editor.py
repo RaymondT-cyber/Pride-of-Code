@@ -8,7 +8,7 @@ class CodeEditor:
     def __init__(self, rect: pygame.Rect, font=None, lines:List[str]=None, max_undos=500):
         self.rect = rect
         self.font = font or pygame.font.SysFont('consolas', 18)
-        self.lines = lines or ['# write Python here']
+        self.lines = lines or ['# Welcome to Code of Pride!', '# Write Python code to control the marching band', '']
         self.cursor = [0, 0]  # line index, column index
         self.scroll = 0  # top visible line
         self.max_undos = max_undos
@@ -40,8 +40,11 @@ class CodeEditor:
             'string': (206,145,120),
             'comment': (106,153,85),
             'number': (181,206,168),
+            'function': (220,220,170),
+            'class': (78,201,176),
             'error_bg': (80,20,20),
-            'selection_bg': (80,100,160)
+            'selection_bg': (80,100,160),
+            'bracket': (180,120,180)
         }
 
         # try to init pygame.scrap for system clipboard if available
@@ -570,6 +573,9 @@ class CodeEditor:
                 elif ttype == 'string': color = self.colors['string']
                 elif ttype == 'comment': color = self.colors['comment']
                 elif ttype == 'number': color = self.colors['number']
+                elif ttype == 'function': color = self.colors['function']
+                elif ttype == 'class': color = self.colors['class']
+                elif ttype == 'bracket': color = self.colors['bracket']
                 surf.blit(self.font.render(text, True, color), (x, y))
                 x += self.font.size(text)[0]
 
@@ -631,3 +637,94 @@ class CodeEditor:
     def check_syntax(self):
         ok, msg = self.check_syntax_quiet()
         return ok, self.syntax_error.get('msg') if self.syntax_error else None
+
+    def _tokenize_line_spans(self, line: str) -> List[Tuple[str, str]]:
+        """Tokenize a line of Python code into spans with types for syntax highlighting."""
+        # This is a simplified tokenizer for basic Python syntax highlighting
+        spans = []
+        i = 0
+        while i < len(line):
+            # Skip whitespace
+            if line[i].isspace():
+                j = i
+                while j < len(line) and line[j].isspace():
+                    j += 1
+                spans.append((line[i:j], 'text'))
+                i = j
+                continue
+
+            # Strings (single or double quotes)
+            if line[i] in ('"', "'"):
+                quote = line[i]
+                j = i + 1
+                while j < len(line) and line[j] != quote:
+                    if line[j] == '\\' and j + 1 < len(line):
+                        j += 2  # Skip escaped character
+                    else:
+                        j += 1
+                if j < len(line):
+                    j += 1  # Include closing quote
+                spans.append((line[i:j], 'string'))
+                i = j
+                continue
+
+            # Comments
+            if line[i] == '#':
+                spans.append((line[i:], 'comment'))
+                break
+
+            # Numbers
+            if line[i].isdigit() or (line[i] == '.' and i + 1 < len(line) and line[i+1].isdigit()):
+                j = i
+                if line[j] == '.':
+                    j += 1
+                while j < len(line) and (line[j].isdigit() or line[j] == '.'):
+                    j += 1
+                # Check for scientific notation
+                if j < len(line) and line[j] in 'eE':
+                    j += 1
+                    if j < len(line) and line[j] in '+-':
+                        j += 1
+                    while j < len(line) and line[j].isdigit():
+                        j += 1
+                spans.append((line[i:j], 'number'))
+                i = j
+                continue
+
+            # Keywords and identifiers
+            if line[i].isalpha() or line[i] == '_':
+                j = i
+                while j < len(line) and (line[j].isalnum() or line[j] == '_'):
+                    j += 1
+                word = line[i:j]
+                
+                # Check for special identifiers
+                if word in keyword.kwlist:
+                    spans.append((word, 'keyword'))
+                elif word in ('True', 'False', 'None'):
+                    spans.append((word, 'keyword'))
+                elif word in dir(__builtins__):
+                    spans.append((word, 'function'))
+                else:
+                    # Check if it's followed by parentheses (function call)
+                    k = j
+                    while k < len(line) and line[k].isspace():
+                        k += 1
+                    if k < len(line) and line[k] == '(':
+                        spans.append((word, 'function'))
+                    else:
+                        spans.append((word, 'text'))
+                i = j
+                continue
+
+            # Brackets
+            if line[i] in '()[]{}':
+                spans.append((line[i], 'bracket'))
+                i += 1
+                continue
+
+            # Operators and other punctuation
+            spans.append((line[i], 'text'))
+            i += 1
+
+        return spans
